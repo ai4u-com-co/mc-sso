@@ -4,6 +4,7 @@ exports.createSession = createSession;
 exports.verifySession = verifySession;
 const node_crypto_1 = require("node:crypto");
 const crypto_1 = require("./crypto");
+const impersonation_1 = require("./impersonation");
 const DEFAULT_TTL_MS = 8 * 60 * 60 * 1000;
 function createSession(tenantId, secret, ttlMs = DEFAULT_TTL_MS, extra = {}) {
     const now = Date.now();
@@ -36,6 +37,8 @@ function verifySession(token, secret) {
             typeof data.exp !== "number")
             return null;
         if (data.exp < Date.now())
+            return null;
+        if (data.impersonation !== undefined && !(0, impersonation_1.isImpersonationInfo)(data.impersonation))
             return null;
         return data;
     }

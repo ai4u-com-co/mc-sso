@@ -1,9 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.verifySession = exports.createSession = exports.verifyMcToken = exports.createMcToken = void 0;
+exports.isImpersonationInfo = exports.verifySession = exports.createSession = exports.verifyMcToken = exports.createMcToken = void 0;
 var token_1 = require("./token");
 Object.defineProperty(exports, "createMcToken", { enumerable: true, get: function () { return token_1.createMcToken; } });
 Object.defineProperty(exports, "verifyMcToken", { enumerable: true, get: function () { return token_1.verifyMcToken; } });
 var session_1 = require("./session");
 Object.defineProperty(exports, "createSession", { enumerable: true, get: function () { return session_1.createSession; } });
 Object.defineProperty(exports, "verifySession", { enumerable: true, get: function () { return session_1.verifySession; } });
+var impersonation_1 = require("./impersonation");
+Object.defineProperty(exports, "isImpersonationInfo", { enumerable: true, get: function () { return impersonation_1.isImpersonationInfo; } });

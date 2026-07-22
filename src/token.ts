@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto"
 import { sign } from "./crypto"
+import { isImpersonationInfo, type ImpersonationInfo } from "./impersonation"
 
 /**
  * Datos de identidad+permisos que Mission Control embebe en el token durante el
@@ -10,6 +11,7 @@ export interface McTokenExtra {
   userId?:         string
   roles?:          string[]
   allowedModules?: string[] | null
+  impersonation?:  ImpersonationInfo
 }
 
 export interface McTokenPayload extends McTokenExtra {
@@ -63,6 +65,7 @@ export function verifyMcToken(
     ) return null
     if (data.exp < Date.now()) return null
     if (data.serviceId !== serviceId) return null
+    if (data.impersonation !== undefined && !isImpersonationInfo(data.impersonation)) return null
     return data
   } catch { return null }
 }

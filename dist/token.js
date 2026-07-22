@@ -4,6 +4,7 @@ exports.createMcToken = createMcToken;
 exports.verifyMcToken = verifyMcToken;
 const node_crypto_1 = require("node:crypto");
 const crypto_1 = require("./crypto");
+const impersonation_1 = require("./impersonation");
 function createMcToken(tenantId, serviceId, displayName, secret, extra = {}) {
     const data = {
         tenantId,
@@ -43,6 +44,8 @@ function verifyMcToken(token, serviceId, secret) {
         if (data.exp < Date.now())
             return null;
         if (data.serviceId !== serviceId)
+            return null;
+        if (data.impersonation !== undefined && !(0, impersonation_1.isImpersonationInfo)(data.impersonation))
             return null;
         return data;
     }

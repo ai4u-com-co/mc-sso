@@ -1,9 +1,11 @@
+import { type ImpersonationInfo } from "./impersonation";
 /** Identidad+permisos opcionales que la sesión conserva tras el handoff SSO. */
 export interface SessionExtra {
     userId?: string;
     roles?: string[];
     allowedModules?: string[] | null;
     displayName?: string;
+    impersonation?: ImpersonationInfo;
 }
 export interface SessionPayload extends SessionExtra {
     tenantId: string;

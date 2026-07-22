@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto"
 import { sign } from "./crypto"
+import { isImpersonationInfo, type ImpersonationInfo } from "./impersonation"
 
 const DEFAULT_TTL_MS = 8 * 60 * 60 * 1000
 
@@ -9,6 +10,7 @@ export interface SessionExtra {
   roles?:          string[]
   allowedModules?: string[] | null
   displayName?:    string
+  impersonation?:  ImpersonationInfo
 }
 
 export interface SessionPayload extends SessionExtra {
@@ -52,6 +54,7 @@ export function verifySession(
       typeof data.exp      !== "number"
     ) return null
     if (data.exp < Date.now()) return null
+    if (data.impersonation !== undefined && !isImpersonationInfo(data.impersonation)) return null
     return data
   } catch { return null }
 }
