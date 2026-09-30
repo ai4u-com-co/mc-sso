@@ -5,7 +5,7 @@ mc-token de 5 minutos (`/api/handoff`, POST auto-enviado con `token` en el body 
 el módulo lo canjea en `/api/mc-auth` por una cookie de sesión local `mc_session` (8 h).
 
 ```bash
-npm install "@ai4u/mc-sso@github:ai4u-com-co/mc-sso#v1.2.0"
+npm install "@ai4u/mc-sso@github:ai4u-com-co/mc-sso#v1.3.0"
 ```
 
 > Fuente de verdad: `ai4u-com-co/kernel` (`packages/mc-sso`). El repo `ai4u-com-co/mc-sso`
@@ -51,6 +51,32 @@ const same    = readMcSession(req.headers.get("cookie"), secret)        // o el 
 
 En rutas API, `readIdentity` de `@ai4u/platform/auth` lee la misma cookie y el mismo formato.
 
+### Atar la sesión a la app y al tenant (1.3.0)
+
+`MISSION_CONTROL_SECRET` se comparte entre apps: **una firma válida no basta**. Pasa el
+`serviceId` de tu app y, si la app es de un solo tenant, `allowedTenants`:
+
+```ts
+import { normalizeTenant } from "@ai4u/config/env"
+const session = readMcSession(req, env.MISSION_CONTROL_SECRET, {
+  serviceId:       SERVICE_ID,          // el mismo de createMcAuthHandler
+  allowedTenants:  ["flexoimpresos"],   // solo apps de un tenant
+  normalizeTenant,                      // opcional: resuelve alias ("flexo" → flexoimpresos)
+})
+```
+
+| opción | default | |
+|---|---|---|
+| `serviceId` | — | Sesión emitida para otro servicio ⇒ `null`. Sin la opción no se valida la app. |
+| `allowedTenants` | — | Tenant fuera de la lista ⇒ `null`. Lista vacía ⇒ rechaza todo. Sin normalizador compara sin mayúsculas/espacios. |
+| `normalizeTenant` | — | `(id) => string` para comparar tenants (alias). Si lanza o da vacío ⇒ rechazada. |
+| `acceptLegacy` | `true` (1.3.0) → `false` (1.4.0) | Sesiones sin `serviceId` (emitidas por ≤ 1.2.0). Con `false` se rechazan siempre. |
+| `cookieName` | `MC_SESSION_COOKIE` | El 3er parámetro también puede ser este string (firma 1.2.0). |
+
+`createMcAuthHandler` (1.3.0) ya guarda el `serviceId` en la sesión. Las sesiones viejas no
+lo traen: por eso `acceptLegacy` es `true` en 1.3.0 (nadie se desloguea al desplegar) y pasa
+a `false` en 1.4.0 (las sesiones duran 8 h, expiran solas).
+
 ## Guard de páginas (`proxy.ts`)
 
 ```ts
@@ -61,6 +87,8 @@ import { env } from "@/lib/env"
 
 const guard = mcSessionGuard({
   getSecret: () => env.MISSION_CONTROL_SECRET,
+  serviceId: SERVICE_ID,                                      // 1.3.0: rechaza sesiones de otras apps
+  allowedTenants: ["flexoimpresos"],                          // 1.3.0: solo apps de un tenant (⇒ 403)
   publicPaths: ["/api/health", /^\/_next\//, "/favicon.ico"], // /api/mc-auth siempre es pública
   loginRedirect: env.MISSION_CONTROL_URL,                    // opcional; sin esto ⇒ 401
 })
@@ -71,7 +99,9 @@ export function proxy(req: NextRequest) {
 ```
 
 `mcSessionGuard` devuelve `undefined` si el request puede seguir, o un `Response`: 500 si
-falta el secreto (fail-closed), 307 a `loginRedirect` o 401 si no hay sesión válida.
+falta el secreto (fail-closed), 403 si el tenant no está en `allowedTenants`, 307 a
+`loginRedirect` o 401 si no hay sesión válida (una sesión de otro `serviceId` cuenta como
+"sin sesión"). Acepta las mismas opciones `serviceId`/`allowedTenants`/`normalizeTenant`/`acceptLegacy`.
 En Next 15 el `middleware.ts` corre en Edge por defecto y no tiene `node:crypto`: ahí usar
 `export const config = { runtime: "nodejs" }` o validar en el layout/route handler.
 

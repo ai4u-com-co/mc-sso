@@ -1,7 +1,7 @@
 # CLAUDE.md — @ai4u/mc-sso
 
 ## Qué es
-Paquete TypeScript `@ai4u/mc-sso` (v1.2.0): protocolo SSO entre Mission Control (MC) y los módulos del
+Paquete TypeScript `@ai4u/mc-sso` (v1.3.0): protocolo SSO entre Mission Control (MC) y los módulos del
 ecosistema superAI. MC firma un mc-token de 5 min; el módulo lo canjea en `/api/mc-auth` por una cookie
 de sesión `mc_session` (8 h). Repo PÚBLICO: documentación y PRs sin secretos ni infraestructura interna.
 
@@ -20,7 +20,7 @@ CI con Node 22. Pensado para Next App Router (handler estándar `Request → Res
 - `src/session.ts`: `createSession`, `verifySession`, `DEFAULT_SESSION_TTL_MS` (8 h).
 - `src/handler.ts`: `createMcAuthHandler`, `readMcSession`, `mcSessionGuard`, `MC_SESSION_COOKIE`.
 - `src/crypto.ts`: `sign` interno. `src/index.ts`: API pública.
-- `tests/` (token, session, handler), `dist/` (build commiteado), `CHANGELOG.md`.
+- `tests/` (token, session, handler, scope), `dist/` (build commiteado), `CHANGELOG.md`.
 
 ## Convenciones y trampas
 - **`dist/` se commitea.** El CI corre type-check, test y build y falla si `git diff -- dist` no está
@@ -36,6 +36,9 @@ CI con Node 22. Pensado para Next App Router (handler estándar `Request → Res
   para no romper verificadores existentes. No cambiar el formato de token/sesión sin versión mayor.
 - `mcSessionGuard` para `proxy.ts` (Next 16, runtime Node). En Next 15 el `middleware.ts` corre en Edge
   y no tiene `node:crypto`: usar runtime nodejs o validar en layout/route handler.
+- **La firma sola no basta** (el secreto se comparte entre apps): desde 1.3.0 la sesión lleva
+  `serviceId` y `readMcSession`/`mcSessionGuard` aceptan `serviceId`/`allowedTenants`/`acceptLegacy`.
+  `acceptLegacy` (sesiones sin `serviceId`) es `true` en 1.3.0 y debe pasar a `false` en 1.4.0.
 - Multitenant: el token y la sesión llevan `tenantId`; quien consuma la sesión debe filtrar permisos y
   queries por ese tenant. No hardcodear tenants.
 

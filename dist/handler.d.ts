@@ -53,12 +53,52 @@ type HeaderCarrier = {
     };
 };
 /**
+ * Restricciones de app/tenant sobre la sesión. El secreto de firma
+ * (`MISSION_CONTROL_SECRET`) se comparte entre apps, así que una firma válida NO
+ * basta: sin estas opciones, una sesión emitida para otra app u otro tenant pasa.
+ */
+export interface McSessionScope {
+    /**
+     * `serviceId` de ESTA app (el mismo que se pasa a `createMcAuthHandler`). Una sesión
+     * emitida para otro servicio ⇒ rechazada. Sin esta opción no se valida la app.
+     */
+    serviceId?: string;
+    /**
+     * Tenants aceptados (apps de un solo tenant, p. ej. `["flexoimpresos"]`). Tenant fuera
+     * de la lista ⇒ rechazada. Lista vacía ⇒ se rechaza todo (fail-closed). Sin esta
+     * opción no se valida el tenant. Se compara con `normalizeTenant` si se pasa; si no,
+     * sin mayúsculas/espacios (`"Flexoimpresos"` == `"flexoimpresos"`, pero `"flexo"` NO).
+     */
+    allowedTenants?: readonly string[];
+    /**
+     * Normalizador de ids de tenant para comparar `allowedTenants` (p. ej. `normalizeTenant`
+     * de `@ai4u/config/env`, que resuelve alias como `"flexo"` → `"FLEXOIMPRESOS"`). Si lanza
+     * o devuelve vacío para el tenant de la sesión ⇒ rechazada.
+     */
+    normalizeTenant?: (tenantId: string) => string;
+    /**
+     * Aceptar sesiones "legacy" sin `serviceId` (emitidas por mc-sso ≤ 1.2.0). Default
+     * `true` en 1.3.0 para no desloguear a todos al desplegar; pasa a `false` en 1.4.0
+     * (las sesiones duran 8 h, así que expiran solas). Con `false` se rechaza toda sesión
+     * sin `serviceId`, se pase o no la opción `serviceId`.
+     */
+    acceptLegacy?: boolean;
+}
+export interface ReadMcSessionOptions extends McSessionScope {
+    /** Nombre de la cookie (default `MC_SESSION_COOKIE`). */
+    cookieName?: string;
+}
+/**
  * Lee y verifica la sesión local (`mc_session`) desde un Request (o cualquier objeto
  * con `headers.get`) o directamente desde el valor del header `Cookie`.
- * Devuelve el payload o `null` si no hay cookie, la firma no cuadra o venció.
+ * Devuelve el payload o `null` si no hay cookie, la firma no cuadra, venció, o no cumple
+ * las restricciones de `opts` (`serviceId`, `allowedTenants`, `acceptLegacy`).
+ *
+ * El 3er parámetro acepta un string (nombre de la cookie, firma de 1.2.0) o un objeto
+ * de opciones.
  */
-export declare function readMcSession(source: HeaderCarrier | string | null | undefined, secret: string | null | undefined, cookieName?: string): SessionPayload | null;
-export interface McSessionGuardOptions {
+export declare function readMcSession(source: HeaderCarrier | string | null | undefined, secret: string | null | undefined, opts?: string | ReadMcSessionOptions): SessionPayload | null;
+export interface McSessionGuardOptions extends McSessionScope {
     secret?: string;
     getSecret?: () => string | null | undefined;
     /**
@@ -74,7 +114,10 @@ export interface McSessionGuardOptions {
 /**
  * Guard de páginas para `proxy.ts`/middleware. Devuelve `undefined` si el request
  * puede seguir (ruta pública o sesión válida) o un `Response` de rechazo:
- * 500 si falta el secreto (fail-closed), 307 a `loginRedirect` o 401 sin sesión.
+ * 500 si falta el secreto (fail-closed), 403 si la sesión es de un tenant fuera de
+ * `allowedTenants`, 307 a `loginRedirect` o 401 sin sesión (incluye sesión de otro
+ * `serviceId` o legacy con `acceptLegacy: false`: se tratan como "sin sesión", así un
+ * nuevo handoff desde MC emite la cookie correcta).
  *
  * Usa node:crypto (vía verifySession): en Next 16 `proxy.ts` corre en runtime Node.
  */

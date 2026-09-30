@@ -14,4 +14,6 @@ export type {
   McAuthErrorEvent,
   McAuthErrorReason,
   McSessionGuardOptions,
+  McSessionScope,
+  ReadMcSessionOptions,
 } from "./handler"

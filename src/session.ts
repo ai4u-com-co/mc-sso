@@ -10,6 +10,13 @@ export interface SessionExtra {
   roles?:          string[]
   allowedModules?: string[] | null
   displayName?:    string
+  /**
+   * Servicio (app) para el que se emitió la sesión — el `serviceId` del mc-token que
+   * canjeó `createMcAuthHandler` (desde 1.3.0). Ata la cookie a esa app: como el secreto
+   * de firma se comparte entre apps, sin este campo una sesión de una app sirve en otra.
+   * Opcional: las sesiones emitidas por 1.2.0 o antes no lo traen ("legacy").
+   */
+  serviceId?:      string
 }
 
 export interface SessionPayload extends SessionExtra {

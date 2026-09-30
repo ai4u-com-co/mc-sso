@@ -109,12 +109,14 @@ function createMcAuthHandler(opts) {
             safeOnError(opts.onError, { reason: "invalid_token", serviceId });
             return jsonError(GENERIC_TOKEN_ERROR, 401);
         }
-        // Mismos campos que copian hoy los 12 receptores manuales.
+        // Mismos campos que copian hoy los 12 receptores manuales + el serviceId (1.3.0),
+        // que ata la sesión a esta app (ver readMcSession({ serviceId })).
         const sessionToken = (0, session_1.createSession)(data.tenantId, secret, ttlMs, {
             userId: data.userId,
             roles: data.roles,
             allowedModules: data.allowedModules,
             displayName: data.displayName,
+            serviceId,
         });
         const target = typeof opts.redirectTo === "function"
             ? opts.redirectTo(data)
@@ -146,19 +148,56 @@ function readCookie(header, name) {
     }
     return undefined;
 }
+function normalizeWith(fn, id) {
+    try {
+        const out = fn ? fn(id) : id.trim().toLowerCase();
+        return typeof out === "string" && out.length > 0 ? out : null;
+    }
+    catch {
+        return null;
+    }
+}
+function tenantAllowed(tenantId, scope) {
+    if (!scope.allowedTenants)
+        return true;
+    const t = normalizeWith(scope.normalizeTenant, tenantId);
+    if (t === null)
+        return false;
+    return scope.allowedTenants.some((a) => normalizeWith(scope.normalizeTenant, a) === t);
+}
+function evaluateSession(source, secret, cookieName, scope) {
+    const header = typeof source === "string" ? source : source?.headers.get("cookie");
+    const token = readCookie(header, cookieName);
+    const session = token ? (0, session_1.verifySession)(token, secret) : null;
+    if (!session)
+        return { rejected: "none" };
+    const hasService = session.serviceId !== undefined;
+    if (!hasService) {
+        if (scope.acceptLegacy === false)
+            return { rejected: "legacy" };
+    }
+    else if (scope.serviceId !== undefined && session.serviceId !== scope.serviceId) {
+        return { rejected: "service" };
+    }
+    if (!tenantAllowed(session.tenantId, scope))
+        return { rejected: "tenant" };
+    return { session };
+}
 /**
  * Lee y verifica la sesión local (`mc_session`) desde un Request (o cualquier objeto
  * con `headers.get`) o directamente desde el valor del header `Cookie`.
- * Devuelve el payload o `null` si no hay cookie, la firma no cuadra o venció.
+ * Devuelve el payload o `null` si no hay cookie, la firma no cuadra, venció, o no cumple
+ * las restricciones de `opts` (`serviceId`, `allowedTenants`, `acceptLegacy`).
+ *
+ * El 3er parámetro acepta un string (nombre de la cookie, firma de 1.2.0) o un objeto
+ * de opciones.
  */
-function readMcSession(source, secret, cookieName = exports.MC_SESSION_COOKIE) {
+function readMcSession(source, secret, opts = {}) {
     if (!secret)
         return null;
-    const header = typeof source === "string" ? source : source?.headers.get("cookie");
-    const token = readCookie(header, cookieName);
-    if (!token)
-        return null;
-    return (0, session_1.verifySession)(token, secret);
+    const { cookieName = exports.MC_SESSION_COOKIE, ...scope } = typeof opts === "string" ? { cookieName: opts } : opts;
+    const result = evaluateSession(source, secret, cookieName, scope);
+    return "session" in result ? result.session : null;
 }
 const ALWAYS_PUBLIC = "/api/mc-auth";
 function matchesPath(pathname, rule) {
@@ -170,13 +209,22 @@ function matchesPath(pathname, rule) {
 /**
  * Guard de páginas para `proxy.ts`/middleware. Devuelve `undefined` si el request
  * puede seguir (ruta pública o sesión válida) o un `Response` de rechazo:
- * 500 si falta el secreto (fail-closed), 307 a `loginRedirect` o 401 sin sesión.
+ * 500 si falta el secreto (fail-closed), 403 si la sesión es de un tenant fuera de
+ * `allowedTenants`, 307 a `loginRedirect` o 401 sin sesión (incluye sesión de otro
+ * `serviceId` o legacy con `acceptLegacy: false`: se tratan como "sin sesión", así un
+ * nuevo handoff desde MC emite la cookie correcta).
  *
  * Usa node:crypto (vía verifySession): en Next 16 `proxy.ts` corre en runtime Node.
  */
 function mcSessionGuard(opts) {
     const publicPaths = [ALWAYS_PUBLIC, ...(opts.publicPaths ?? [])];
     const cookieName = opts.cookieName ?? exports.MC_SESSION_COOKIE;
+    const scope = {
+        serviceId: opts.serviceId,
+        allowedTenants: opts.allowedTenants,
+        normalizeTenant: opts.normalizeTenant,
+        acceptLegacy: opts.acceptLegacy,
+    };
     return function guard(req) {
         const url = new URL(req.url);
         if (publicPaths.some((rule) => matchesPath(url.pathname, rule)))
@@ -190,8 +238,11 @@ function mcSessionGuard(opts) {
         const { secret } = resolveSecret(opts);
         if (!secret)
             return jsonError(GENERIC_CONFIG_ERROR, 500);
-        if (readMcSession(req, secret, cookieName))
+        const result = evaluateSession(req, secret, cookieName, scope);
+        if ("session" in result)
             return undefined;
+        if (result.rejected === "tenant")
+            return jsonError("Acceso denegado", 403);
         if (login) {
             return new Response(null, {
                 status: 307,
