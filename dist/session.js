@@ -1,11 +1,13 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.DEFAULT_SESSION_TTL_MS = void 0;
 exports.createSession = createSession;
 exports.verifySession = verifySession;
 const node_crypto_1 = require("node:crypto");
 const crypto_1 = require("./crypto");
-const DEFAULT_TTL_MS = 8 * 60 * 60 * 1000;
-function createSession(tenantId, secret, ttlMs = DEFAULT_TTL_MS, extra = {}) {
+/** TTL por defecto de la sesión local tras el handoff SSO: 8 h (ver FLX-091). */
+exports.DEFAULT_SESSION_TTL_MS = 8 * 60 * 60 * 1000;
+function createSession(tenantId, secret, ttlMs = exports.DEFAULT_SESSION_TTL_MS, extra = {}) {
     const now = Date.now();
     const data = { tenantId, ...extra, iat: now, exp: now + ttlMs };
     const payload = Buffer.from(JSON.stringify(data)).toString("base64url");

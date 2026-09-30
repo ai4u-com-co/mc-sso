@@ -1,3 +1,5 @@
+/** TTL por defecto de la sesión local tras el handoff SSO: 8 h (ver FLX-091). */
+export declare const DEFAULT_SESSION_TTL_MS: number;
 /** Identidad+permisos opcionales que la sesión conserva tras el handoff SSO. */
 export interface SessionExtra {
     userId?: string;

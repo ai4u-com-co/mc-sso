@@ -1,7 +1,8 @@
 import { timingSafeEqual } from "node:crypto"
 import { sign } from "./crypto"
 
-const DEFAULT_TTL_MS = 8 * 60 * 60 * 1000
+/** TTL por defecto de la sesión local tras el handoff SSO: 8 h (ver FLX-091). */
+export const DEFAULT_SESSION_TTL_MS = 8 * 60 * 60 * 1000
 
 /** Identidad+permisos opcionales que la sesión conserva tras el handoff SSO. */
 export interface SessionExtra {
@@ -20,7 +21,7 @@ export interface SessionPayload extends SessionExtra {
 export function createSession(
   tenantId: string,
   secret:   string,
-  ttlMs     = DEFAULT_TTL_MS,
+  ttlMs     = DEFAULT_SESSION_TTL_MS,
   extra:    SessionExtra = {},
 ): string {
   const now  = Date.now()
